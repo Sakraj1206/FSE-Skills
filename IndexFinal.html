@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FSE Skills Intelligence Platform</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body,#root{height:100%}
+body{font-family:'Inter',system-ui,sans-serif;background:#F4F7FA;min-height:100vh}
+input,select,button,textarea{font-family:'Inter',system-ui,sans-serif}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:#C4D0DC;border-radius:3px}
+::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const {useState,useMemo,useEffect}=React;
+
+// ── Data ──────────────────────────────────────────────────────────────────────
+const SKILL_GROUPS=[
+  {key:"appdev",label:"App Dev",icon:"⬡",color:{bg:"#E8F4FD",accent:"#1A7FCC",dark:"#0D5A99",pill:"#C8E8F8"},
+   skills:["Java / Spring Boot","Python","Node.js","React / Angular / Vue","Microservices",".NET / C#","REST / GraphQL","Full Stack (MEAN/MERN)"]},
+  {key:"qea",label:"QEA",icon:"◈",color:{bg:"#F0FBF4",accent:"#1A9E5C",dark:"#0D7040",pill:"#C0EED4"},
+   skills:["Manual Testing","Selenium / Automation","API Testing","Performance Testing","BDD / TDD","Test Strategy","JIRA / Xray"]},
+  {key:"cloud",label:"Cloud Infra",icon:"◎",color:{bg:"#F3F0FF",accent:"#6B46E0",dark:"#4A28B8",pill:"#DDD8FF"},
+   skills:["AWS","Azure","GCP","Multicloud","VMware / SDDC","IaaC / Terraform","Cloud Networking","DR / BCP"]},
+  {key:"cybersec",label:"Cybersecurity",icon:"⬟",color:{bg:"#FFF4F0",accent:"#D94F2B",dark:"#A33218",pill:"#FFD8CC"},
+   skills:["Network Security","IAM","Threat Modeling","SIEM / SOC","Pen Testing","Cloud Security","Compliance"]},
+  {key:"devops",label:"DevOps / CI-CD",icon:"⬡",color:{bg:"#F0FBF8",accent:"#0D8C6E",dark:"#085A47",pill:"#B8EEE2"},
+   skills:["Docker / Kubernetes","Jenkins / GitHub Actions","GitOps / ArgoCD","Monitoring (Grafana)","Ansible / Chef","Release Mgmt","SRE Practices"]},
+  {key:"products",label:"Products / Platforms",icon:"◈",color:{bg:"#FFFBF0",accent:"#C07800",dark:"#7A4C00",pill:"#FFEAB8"},
+   skills:["ServiceNow","Salesforce","SAP","MuleSoft / Integration","M365 / Power Platform","Workday / HR Tech","Snowflake / Databricks"]},
+  {key:"ai",label:"AI / GenAI",icon:"◎",color:{bg:"#FFF0FA",accent:"#C02880",dark:"#800055",pill:"#FFD0EE"},
+   skills:["AI Fundamentals","Prompt Engineering","Context Engineering","LLM Ops","RAG Pipelines","LangChain / LlamaIndex","AI Authoring"]},
+  {key:"agentic",label:"Agentic AI",icon:"⬟",color:{bg:"#F0F4FF",accent:"#2840D4",dark:"#1428A0",pill:"#CCD4FF"},
+   skills:["Agentic AI Design","MCP Protocol","Multi-Agent Systems","Tool Use / Functions","Agent Orchestration","Autonomous Workflows"]},
+];
+
+const PROF=[
+  {v:1,l:"Novice",      d:"Theoretical awareness only",            bg:"#FDE8D8",tc:"#8B3A1C"},
+  {v:2,l:"Aware",       d:"Guided hands-on work",                  bg:"#B5D4F4",tc:"#0C447C"},
+  {v:3,l:"Practitioner",d:"Independent delivery",                  bg:"#85B7EB",tc:"#0C447C"},
+  {v:4,l:"Proficient",  d:"Deep expertise, leads programs",        bg:"#378ADD",tc:"#E6F1FB"},
+  {v:5,l:"Expert",      d:"Thought leader, industry-level depth",  bg:"#185FA5",tc:"#FFFFFF"},
+];
+
+const STORAGE_KEY_FSES   = "fse_skills_fses_v1";
+const STORAGE_KEY_SKILLS = "fse_skills_data_v1";
+
+const DEFAULT_FSES=[
+  {id:"f1",name:"FSE 01",   grade:"AD",role:"Principal FSE",track:"Technical"},
+  {id:"f2",name:"FSE 02",   grade:"SA",role:"FSE",          track:"Technical"},
+  {id:"f3",name:"FSE 03",grade:"SA",role:"FSE",          track:"Technical"},
+  {id:"f4",name:"FSE 04",grade:"M", role:"Senior FSE",   track:"Technical"},
+];
+
+const DEFAULT_SKILLS={
+  f1:{"Java / Spring Boot":4,"Python":3,"React / Angular / Vue":4,"Microservices":4,"REST / GraphQL":4,"Docker / Kubernetes":3,"Jenkins / GitHub Actions":3,"AWS":4,"AI Fundamentals":4,"Prompt Engineering":4,"Context Engineering":4,"RAG Pipelines":4,"LangChain / LlamaIndex":4,"AI Authoring":4,"Agentic AI Design":4,"MCP Protocol":4,"Multi-Agent Systems":3,"Agent Orchestration":3},
+  f2:{"Java / Spring Boot":5,"React / Angular / Vue":4,"Microservices":4,"REST / GraphQL":3,"Selenium / Automation":3,"Docker / Kubernetes":2,"Jenkins / GitHub Actions":2,"AI Fundamentals":3,"Prompt Engineering":2,"Agentic AI Design":2},
+  f3:{"Java / Spring Boot":4,"React / Angular / Vue":4,"REST / GraphQL":2,"Manual Testing":3,"Selenium / Automation":2,"AI Fundamentals":1},
+  f4:{"AWS":2,"Azure":4,"Multicloud":5,"VMware / SDDC":5,"IaaC / Terraform":4,"Cloud Networking":4,"DR / BCP":4,"Network Security":3,"Cloud Security":3,"AI Fundamentals":2},
+};
+
+function loadFromStorage(key, fallback){
+  try{const v=localStorage.getItem(key);return v?JSON.parse(v):fallback;}
+  catch{return fallback;}
+}
+function saveToStorage(key,val){try{localStorage.setItem(key,JSON.stringify(val));}catch{}}
+
+// ── Atoms ─────────────────────────────────────────────────────────────────────
+function ProfBadge({value,small}){
+  if(!value)return React.createElement('span',{style:{color:"#C4CDD6",fontSize:11}},"–");
+  const p=PROF.find(x=>x.v===value);
+  return React.createElement('span',{style:{background:p.bg,color:p.tc,borderRadius:4,
+    padding:small?"1px 5px":"2px 7px",fontSize:small?10:11,fontWeight:700,
+    display:"inline-block",textAlign:"center",minWidth:18}},value);
+}
+
+function Btn({children,onClick,variant="primary",small,disabled,style:sx={}}){
+  const v={
+    primary:{background:"#00BFA5",color:"#fff",border:"none"},
+    secondary:{background:"#1C2B3A",color:"#fff",border:"none"},
+    danger:{background:"#FEE2E2",color:"#B91C1C",border:"1px solid #FCA5A5"},
+    ghost:{background:"transparent",color:"#5F7080",border:"1.5px solid #D4DCE4"},
+  };
+  return React.createElement('button',{onClick,disabled,
+    style:{...v[variant],borderRadius:6,cursor:disabled?"not-allowed":"pointer",
+      padding:small?"4px 10px":"7px 16px",fontSize:small?11:12,fontWeight:600,
+      opacity:disabled?.5:1,fontFamily:"inherit",transition:"opacity .15s",whiteSpace:"nowrap",...sx}
+  },children);
+}
+
+function Modal({title,onClose,children,width=500}){
+  useEffect(()=>{
+    const h=e=>{if(e.key==="Escape")onClose();};
+    window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);
+  },[]);
+  return React.createElement('div',{
+    style:{position:"fixed",inset:0,background:"rgba(12,20,30,.55)",zIndex:1000,
+      display:"flex",alignItems:"center",justifyContent:"center",padding:16},
+    onClick:e=>e.target===e.currentTarget&&onClose()},
+    React.createElement('div',{style:{background:"#fff",borderRadius:12,width:"100%",maxWidth:width,
+      maxHeight:"90vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.22)"}},
+      React.createElement('div',{style:{padding:"16px 22px",borderBottom:"1px solid #EEF2F6",
+        display:"flex",alignItems:"center",gap:10}},
+        React.createElement('span',{style:{flex:1,fontWeight:700,fontSize:14,color:"#1C2B3A"}},title),
+        React.createElement('button',{onClick:onClose,style:{background:"none",border:"none",
+          fontSize:18,cursor:"pointer",color:"#94A3B8",lineHeight:1}},"✕")
+      ),
+      React.createElement('div',{style:{padding:"18px 22px"}},children)
+    )
+  );
+}
+
+function Toast({msg,onDone}){
+  useEffect(()=>{const t=setTimeout(onDone,2500);return()=>clearTimeout(t);},[]);
+  return React.createElement('div',{style:{position:"fixed",bottom:24,right:24,
+    background:"#1C2B3A",color:"#fff",borderRadius:8,padding:"10px 18px",
+    fontSize:13,fontWeight:500,boxShadow:"0 4px 16px rgba(0,0,0,.2)",zIndex:2000,
+    animation:"fadeIn .2s"}},
+    "✓  "+msg
+  );
+}
+
+// ── Skill Form ────────────────────────────────────────────────────────────────
+function SkillForm({existing,onSave,onClose}){
+  const [grpKey,setGrpKey]=useState(existing?.grpKey||SKILL_GROUPS[0].key);
+  const [skill,setSkill]=useState(existing?.skill||"");
+  const [custom,setCustom]=useState("");
+  const [prof,setProf]=useState(existing?.prof||3);
+  const grp=SKILL_GROUPS.find(g=>g.key===grpKey);
+  const finalSkill=skill==="__custom__"?custom.trim():skill;
+
+  return React.createElement(Modal,{title:existing?"Edit skill":"Add skill",onClose,width:530},
+    React.createElement('div',{style:{display:"flex",flexDirection:"column",gap:16}},
+      React.createElement('div',null,
+        React.createElement('label',{style:{fontSize:11,fontWeight:700,color:"#64748B",display:"block",marginBottom:8,letterSpacing:".06em"}},"SKILL GROUP"),
+        React.createElement('div',{style:{display:"flex",flexWrap:"wrap",gap:5}},
+          SKILL_GROUPS.map(g=>React.createElement('button',{key:g.key,onClick:()=>{setGrpKey(g.key);setSkill("");setCustom("");},
+            style:{padding:"4px 10px",borderRadius:20,fontSize:11,fontWeight:500,cursor:"pointer",fontFamily:"inherit",
+              border:grpKey===g.key?`2px solid ${g.color.accent}`:"1.5px solid #E2E8F0",
+              background:grpKey===g.key?g.color.bg:"#fff",color:grpKey===g.key?g.color.dark:"#64748B"}
+          },g.label))
+        )
+      ),
+      React.createElement('div',null,
+        React.createElement('label',{style:{fontSize:11,fontWeight:700,color:"#64748B",display:"block",marginBottom:6,letterSpacing:".06em"}},"SKILL / TECHNOLOGY"),
+        React.createElement('select',{value:skill,onChange:e=>setSkill(e.target.value),
+          style:{width:"100%",padding:"8px 10px",borderRadius:6,border:"1.5px solid #D4DCE4",fontSize:13,fontFamily:"inherit"}},
+          React.createElement('option',{value:""},"— select a skill —"),
+          grp.skills.map(s=>React.createElement('option',{key:s,value:s},s)),
+          React.createElement('option',{value:"__custom__"},"+ Enter custom skill…")
+        ),
+        skill==="__custom__"&&React.createElement('input',{
+          placeholder:"Type custom skill name…",value:custom,onChange:e=>setCustom(e.target.value),autoFocus:true,
+          style:{marginTop:8,width:"100%",padding:"8px 10px",borderRadius:6,border:"1.5px solid #00BFA5",fontSize:13,fontFamily:"inherit"}
+        })
+      ),
+      React.createElement('div',null,
+        React.createElement('label',{style:{fontSize:11,fontWeight:700,color:"#64748B",display:"block",marginBottom:6,letterSpacing:".06em"}},"PROFICIENCY LEVEL"),
+        React.createElement('div',{style:{display:"flex",flexDirection:"column",gap:5}},
+          PROF.map(p=>React.createElement('label',{key:p.v,
+            style:{display:"flex",alignItems:"center",gap:10,padding:"7px 12px",borderRadius:6,cursor:"pointer",
+              border:prof===p.v?`2px solid ${p.bg}`:"1.5px solid #EEF2F6",
+              background:prof===p.v?p.bg+"22":"#FAFBFC"}},
+            React.createElement('input',{type:"radio",name:"prof",checked:prof===p.v,onChange:()=>setProf(p.v),style:{accentColor:p.bg,flexShrink:0}}),
+            React.createElement('span',{style:{background:p.bg,color:p.tc,borderRadius:4,padding:"1px 7px",fontSize:11,fontWeight:800,minWidth:20,textAlign:"center"}},p.v),
+            React.createElement('span',{style:{fontWeight:600,fontSize:13,color:"#1C2B3A",minWidth:90}},p.l),
+            React.createElement('span',{style:{fontSize:11,color:"#94A3B8"}},p.d)
+          ))
+        )
+      ),
+      React.createElement('div',{style:{display:"flex",gap:8,justifyContent:"flex-end",paddingTop:4}},
+        React.createElement(Btn,{variant:"ghost",onClick:onClose},"Cancel"),
+        React.createElement(Btn,{onClick:()=>finalSkill&&onSave({grpKey,skill:finalSkill,prof}),
+          disabled:!finalSkill||finalSkill==="__custom__"},existing?"Save changes":"Add skill")
+      )
+    )
+  );
+}
+
+// ── FSE Form ──────────────────────────────────────────────────────────────────
+function FSEForm({existing,onSave,onClose}){
+  const [name,setName]=useState(existing?.name||"");
+  const [grade,setGrade]=useState(existing?.grade||"");
+  const [role,setRole]=useState(existing?.role||"FSE");
+  const [track,setTrack]=useState(existing?.track||"Technical");
+  const inp={width:"100%",padding:"8px 10px",borderRadius:6,border:"1.5px solid #D4DCE4",fontSize:13,fontFamily:"inherit",boxSizing:"border-box"};
+  return React.createElement(Modal,{title:existing?"Edit FSE profile":"Add new FSE",onClose,width:400},
+    React.createElement('div',{style:{display:"flex",flexDirection:"column",gap:14}},
+      ...[["FULL NAME",name,setName,"e.g. Priya Sharma",true],["GRADE / BAND",grade,setGrade,"e.g. SA, M, AD",false]].map(([l,v,s,ph,af])=>
+        React.createElement('div',{key:l},
+          React.createElement('label',{style:{fontSize:11,fontWeight:700,color:"#64748B",display:"block",marginBottom:5,letterSpacing:".06em"}},l),
+          React.createElement('input',{value:v,onChange:e=>s(e.target.value),placeholder:ph,autoFocus:af,style:inp})
+        )
+      ),
+      React.createElement('div',null,
+        React.createElement('label',{style:{fontSize:11,fontWeight:700,color:"#64748B",display:"block",marginBottom:5,letterSpacing:".06em"}},"ROLE"),
+        React.createElement('select',{value:role,onChange:e=>setRole(e.target.value),style:{...inp,width:"100%"}},
+          ["FSE","Senior FSE","Principal FSE","Lead FSE"].map(r=>React.createElement('option',{key:r},r))
+        )
+      ),
+      React.createElement('div',null,
+        React.createElement('label',{style:{fontSize:11,fontWeight:700,color:"#64748B",display:"block",marginBottom:6,letterSpacing:".06em"}},"TRACK"),
+        React.createElement('div',{style:{display:"flex",gap:8}},
+          ["Technical","Behavioural","Hybrid"].map(t=>React.createElement('label',{key:t,
+            style:{display:"flex",alignItems:"center",gap:6,padding:"6px 14px",borderRadius:20,cursor:"pointer",flex:1,justifyContent:"center",
+              border:track===t?"2px solid #00BFA5":"1.5px solid #E2E8F0",
+              background:track===t?"#E0FBF8":"#fff",fontSize:12,fontWeight:500}},
+            React.createElement('input',{type:"radio",name:"track",checked:track===t,onChange:()=>setTrack(t),style:{accentColor:"#00BFA5"}}),t
+          ))
+        )
+      ),
+      React.createElement('div',{style:{display:"flex",gap:8,justifyContent:"flex-end",paddingTop:4}},
+        React.createElement(Btn,{variant:"ghost",onClick:onClose},"Cancel"),
+        React.createElement(Btn,{onClick:()=>name.trim()&&onSave({name:name.trim(),grade:grade.trim(),role,track}),disabled:!name.trim()},existing?"Save changes":"Add FSE")
+      )
+    )
+  );
+}
+
+// ── Educator View ─────────────────────────────────────────────────────────────
+function EducatorView({fse,allSkills,onUpdate,onToast}){
+  const [modal,setModal]=useState(null);
+  const [filterGrp,setFilterGrp]=useState("all");
+  const mySkills=allSkills[fse.id]||{};
+  const cnt=Object.keys(mySkills).length;
+  const avg=cnt?(Object.values(mySkills).reduce((a,b)=>a+b,0)/cnt).toFixed(1):"–";
+  const hi=Object.values(mySkills).filter(v=>v>=4).length;
+
+  const rows=Object.entries(mySkills)
+    .map(([skill,prof])=>{const grp=SKILL_GROUPS.find(g=>g.skills.includes(skill))||SKILL_GROUPS[0];return{skill,prof,grp};})
+    .filter(r=>filterGrp==="all"||r.grp.key===filterGrp)
+    .sort((a,b)=>a.grp.key.localeCompare(b.grp.key)||a.skill.localeCompare(b.skill));
+
+  function save({grpKey,skill,prof}){
+    onUpdate(fse.id,{...mySkills,[skill]:prof});
+    setModal(null);
+    onToast(modal?.mode==="edit"?"Skill updated":"Skill added");
+  }
+  function del(skill){
+    const n={...mySkills};delete n[skill];
+    onUpdate(fse.id,n);
+    onToast("Skill removed");
+  }
+
+  return React.createElement('div',{style:{maxWidth:800,margin:"0 auto"}},
+    // Identity card
+    React.createElement('div',{style:{background:"linear-gradient(135deg,#1C2B3A,#243547)",borderRadius:12,
+      padding:"20px 26px",marginBottom:22,display:"flex",alignItems:"center",gap:18,
+      boxShadow:"0 4px 16px rgba(0,0,0,.14)"}},
+      React.createElement('div',{style:{width:50,height:50,borderRadius:"50%",background:"#00BFA5",
+        display:"flex",alignItems:"center",justifyContent:"center",fontSize:19,fontWeight:800,color:"#fff",flexShrink:0}},
+        fse.name.split(" ").map(w=>w[0]).join("").slice(0,2)
+      ),
+      React.createElement('div',{style:{flex:1}},
+        React.createElement('div',{style:{color:"#fff",fontWeight:700,fontSize:16}},fse.name),
+        React.createElement('div',{style:{color:"#7FB3CC",fontSize:12,marginTop:2}},fse.grade+(fse.grade?" · ":"")+fse.role+" · "+fse.track+" FSE")
+      ),
+      ...[["Skills",cnt,"#00BFA5"],["Avg level",avg,"#60A5FA"],["Level 4–5",hi,"#A78BFA"]].map(([l,v,c])=>
+        React.createElement('div',{key:l,style:{textAlign:"center",minWidth:60}},
+          React.createElement('div',{style:{color:c,fontWeight:800,fontSize:22}},v),
+          React.createElement('div',{style:{color:"#7FB3CC",fontSize:10,marginTop:1}},l)
+        )
+      )
+    ),
+    // Controls
+    React.createElement('div',{style:{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap",alignItems:"center"}},
+      React.createElement('select',{value:filterGrp,onChange:e=>setFilterGrp(e.target.value),
+        style:{padding:"6px 10px",borderRadius:6,border:"1.5px solid #D4DCE4",fontSize:12,fontFamily:"inherit",flex:1,minWidth:140}},
+        React.createElement('option',{value:"all"},"All skill groups"),
+        SKILL_GROUPS.map(g=>React.createElement('option',{key:g.key,value:g.key},g.label))
+      ),
+      React.createElement(Btn,{onClick:()=>setModal({mode:"add"})},"+ Add skill")
+    ),
+    cnt===0
+      ? React.createElement('div',{style:{textAlign:"center",padding:"48px 20px",color:"#94A3B8",
+          border:"2px dashed #E2E8F0",borderRadius:12}},
+          React.createElement('div',{style:{fontSize:40,marginBottom:10}},"🎯"),
+          React.createElement('div',{style:{fontWeight:600,fontSize:14,color:"#475569",marginBottom:6}},"No skills added yet"),
+          React.createElement('div',{style:{fontSize:13,marginBottom:16}},"Add your first skill to start building your capability profile"),
+          React.createElement(Btn,{onClick:()=>setModal({mode:"add"})},"+ Add first skill")
+        )
+      : React.createElement('div',{style:{display:"flex",flexDirection:"column",gap:8}},
+          SKILL_GROUPS.map(grp=>{
+            const grpRows=rows.filter(r=>r.grp.key===grp.key);
+            if(!grpRows.length)return null;
+            return React.createElement('div',{key:grp.key,style:{borderRadius:10,overflow:"hidden",border:`1.5px solid ${grp.color.pill}`}},
+              React.createElement('div',{style:{background:grp.color.bg,padding:"7px 14px",display:"flex",alignItems:"center",gap:8}},
+                React.createElement('span',{style:{fontSize:13}},grp.icon),
+                React.createElement('span',{style:{fontWeight:700,fontSize:11,color:grp.color.dark,textTransform:"uppercase",letterSpacing:".06em"}},grp.label),
+                React.createElement('span',{style:{background:grp.color.pill,color:grp.color.dark,borderRadius:20,padding:"1px 8px",fontSize:10,marginLeft:"auto"}},grpRows.length+" skills")
+              ),
+              ...grpRows.map((r,ri)=>React.createElement('div',{key:r.skill,
+                style:{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",
+                  background:ri%2===0?"#fff":"#FAFBFD",borderTop:"1px solid #F0F4F8"}},
+                React.createElement('span',{style:{flex:1,fontSize:13,color:"#1C2B3A"}},r.skill),
+                React.createElement(ProfBadge,{value:r.prof}),
+                React.createElement('span',{style:{fontSize:11,color:"#94A3B8",minWidth:80,textAlign:"right"}},PROF.find(p=>p.v===r.prof)?.l),
+                React.createElement(Btn,{small:true,variant:"ghost",
+                  onClick:()=>setModal({mode:"edit",grpKey:r.grp.key,skill:r.skill,prof:r.prof})},"Edit"),
+                React.createElement(Btn,{small:true,variant:"danger",onClick:()=>del(r.skill)},"Remove")
+              ))
+            );
+          })
+        ),
+    modal&&React.createElement(SkillForm,{
+      existing:modal.mode==="edit"?modal:null,
+      onSave:save,onClose:()=>setModal(null)
+    })
+  );
+}
+
+// ── PM View ────────────────────────────────────────────────────────────────────
+function PMView({fses,allSkills,setFses,setSkills,onToast}){
+  const [fseModal,setFseModal]=useState(null);
+  const [expanded,setExpanded]=useState(null);
+  const [delConfirm,setDelConfirm]=useState(null);
+  const [search,setSearch]=useState("");
+  const total=Object.values(allSkills).reduce((s,sk)=>s+Object.keys(sk).length,0);
+
+  const filtered=fses.filter(f=>f.name.toLowerCase().includes(search.toLowerCase())||f.role.toLowerCase().includes(search.toLowerCase()));
+
+  function addFSE(data){
+    const id="f"+Date.now();
+    setFses(p=>{const n=[...p,{id,...data}];saveToStorage(STORAGE_KEY_FSES,n);return n;});
+    onToast("FSE added — "+data.name);setFseModal(null);
+  }
+  function editFSE(id,data){
+    setFses(p=>{const n=p.map(f=>f.id===id?{...f,...data}:f);saveToStorage(STORAGE_KEY_FSES,n);return n;});
+    onToast("Profile updated");setFseModal(null);
+  }
+  function deleteFSE(id){
+    setFses(p=>{const n=p.filter(f=>f.id!==id);saveToStorage(STORAGE_KEY_FSES,n);return n;});
+    setSkills(p=>{const n={...p};delete n[id];saveToStorage(STORAGE_KEY_SKILLS,n);return n;});
+    onToast("FSE removed");setDelConfirm(null);
+  }
+
+  return React.createElement('div',{style:{maxWidth:860,margin:"0 auto"}},
+    // Stats
+    React.createElement('div',{style:{display:"flex",gap:12,marginBottom:22,flexWrap:"wrap"}},
+      ...[["Total FSEs",fses.length,"#00BFA5"],
+          ["Technical",fses.filter(f=>f.track==="Technical").length,"#1A7FCC"],
+          ["Skill entries",total,"#6B46E0"],
+          ["Groups covered",SKILL_GROUPS.filter(g=>Object.values(allSkills).some(sk=>Object.keys(sk).some(s=>g.skills.includes(s)))).length+"/"+SKILL_GROUPS.length,"#C07800"]
+         ].map(([l,v,c])=>
+        React.createElement('div',{key:l,style:{flex:1,minWidth:110,background:"#fff",borderRadius:10,
+          padding:"13px 16px",border:"1.5px solid #EEF2F6",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}},
+          React.createElement('div',{style:{color:c,fontWeight:800,fontSize:24}},v),
+          React.createElement('div',{style:{color:"#94A3B8",fontSize:11,marginTop:2}},l)
+        )
+      )
+    ),
+    React.createElement('div',{style:{display:"flex",gap:8,marginBottom:14,alignItems:"center",flexWrap:"wrap"}},
+      React.createElement('input',{value:search,onChange:e=>setSearch(e.target.value),
+        placeholder:"Search FSEs…",
+        style:{flex:1,minWidth:160,padding:"7px 10px",borderRadius:6,border:"1.5px solid #D4DCE4",fontSize:12,fontFamily:"inherit"}}),
+      React.createElement('span',{style:{fontWeight:700,fontSize:14,color:"#1C2B3A",whiteSpace:"nowrap"}},"FSE Roster"),
+      React.createElement(Btn,{onClick:()=>setFseModal({mode:"add"})},"+ Add FSE")
+    ),
+    filtered.length===0&&React.createElement('div',{style:{textAlign:"center",padding:"32px",color:"#94A3B8",border:"2px dashed #E2E8F0",borderRadius:10}},
+      "No FSEs match your search"
+    ),
+    React.createElement('div',{style:{display:"flex",flexDirection:"column",gap:8}},
+      filtered.map(fse=>{
+        const sk=allSkills[fse.id]||{};
+        const c=Object.keys(sk).length;
+        const av=c?(Object.values(sk).reduce((a,b)=>a+b,0)/c).toFixed(1):"–";
+        const isExp=expanded===fse.id;
+        return React.createElement('div',{key:fse.id,style:{border:"1.5px solid #EEF2F6",borderRadius:10,overflow:"hidden",background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}},
+          React.createElement('div',{style:{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",cursor:"pointer"},
+            onClick:()=>setExpanded(isExp?null:fse.id)},
+            React.createElement('div',{style:{width:36,height:36,borderRadius:"50%",
+              background:fse.track==="Technical"?"#1C2B3A":"#6B46E0",
+              display:"flex",alignItems:"center",justifyContent:"center",
+              color:"#fff",fontWeight:700,fontSize:12,flexShrink:0}},
+              fse.name.split(" ").map(w=>w[0]).join("").slice(0,2)
+            ),
+            React.createElement('div',{style:{flex:1,minWidth:0}},
+              React.createElement('div',{style:{fontWeight:600,fontSize:13,color:"#1C2B3A",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},fse.name),
+              React.createElement('div',{style:{color:"#94A3B8",fontSize:11,marginTop:1}},fse.grade+(fse.grade?" · ":"")+fse.role)
+            ),
+            React.createElement('span',{style:{background:fse.track==="Technical"?"#E8F4FD":"#F3F0FF",
+              color:fse.track==="Technical"?"#1A7FCC":"#6B46E0",
+              borderRadius:20,padding:"2px 10px",fontSize:10,fontWeight:500,whiteSpace:"nowrap"}},fse.track),
+            ...[["Skills",c,"#00BFA5"],["Avg",av,"#1A7FCC"]].map(([l,v,col])=>
+              React.createElement('div',{key:l,style:{textAlign:"center",minWidth:44}},
+                React.createElement('div',{style:{fontWeight:700,color:col,fontSize:15}},v),
+                React.createElement('div',{style:{fontSize:10,color:"#94A3B8"}},l)
+              )
+            ),
+            React.createElement('div',{style:{display:"flex",gap:5}},
+              React.createElement(Btn,{small:true,variant:"ghost",onClick:e=>{e.stopPropagation();setFseModal({mode:"edit",fse});}},"Edit"),
+              React.createElement(Btn,{small:true,variant:"danger",onClick:e=>{e.stopPropagation();setDelConfirm(fse);}},"Delete")
+            ),
+            React.createElement('span',{style:{color:"#C4D0DC",fontSize:14,marginLeft:4,
+              transform:isExp?"rotate(180deg)":"none",transition:"transform .2s",display:"inline-block"}},"▾")
+          ),
+          isExp&&React.createElement('div',{style:{borderTop:"1px solid #F0F4F8",padding:"12px 16px",background:"#FAFBFD"}},
+            Object.keys(sk).length===0
+              ? React.createElement('div',{style:{fontSize:12,color:"#94A3B8",fontStyle:"italic"}},"No skills entered yet")
+              : React.createElement('div',{style:{display:"flex",flexWrap:"wrap",gap:7}},
+                  SKILL_GROUPS.map(grp=>{
+                    const gs=Object.entries(sk).filter(([s])=>grp.skills.includes(s));
+                    if(!gs.length)return null;
+                    return React.createElement('div',{key:grp.key,style:{background:grp.color.bg,borderRadius:8,
+                      padding:"6px 10px",border:`1px solid ${grp.color.pill}`}},
+                      React.createElement('div',{style:{fontSize:10,fontWeight:700,color:grp.color.dark,
+                        marginBottom:4,textTransform:"uppercase",letterSpacing:".05em"}},grp.label),
+                      React.createElement('div',{style:{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}},
+                        gs.map(([s,p])=>React.createElement('span',{key:s,style:{fontSize:11,color:grp.color.dark}},
+                          s+" ",React.createElement(ProfBadge,{value:p,small:true})
+                        ))
+                      )
+                    );
+                  })
+                )
+          )
+        );
+      })
+    ),
+    fseModal&&React.createElement(FSEForm,{
+      existing:fseModal.mode==="edit"?fseModal.fse:null,
+      onSave:data=>fseModal.mode==="edit"?editFSE(fseModal.fse.id,data):addFSE(data),
+      onClose:()=>setFseModal(null)
+    }),
+    delConfirm&&React.createElement(Modal,{title:"Delete FSE",onClose:()=>setDelConfirm(null),width:360},
+      React.createElement('p',{style:{color:"#475569",fontSize:13,marginBottom:16}},
+        "Remove ",React.createElement('strong',null,delConfirm.name)," and all their skills? This cannot be undone."
+      ),
+      React.createElement('div',{style:{display:"flex",gap:8,justifyContent:"flex-end"}},
+        React.createElement(Btn,{variant:"ghost",onClick:()=>setDelConfirm(null)},"Cancel"),
+        React.createElement(Btn,{variant:"danger",onClick:()=>deleteFSE(delConfirm.id)},"Yes, delete")
+      )
+    )
+  );
+}
+
+// ── Heatmap View ───────────────────────────────────────────────────────────────
+function HeatmapView({fses,allSkills}){
+  const [dim,setDim]=useState("proficiency");
+  const [track,setTrack]=useState("Technical");
+  const [grpFilter,setGrpFilter]=useState("all");
+  const [exportModal,setExportModal]=useState(false);
+
+  const filtFses=fses.filter(f=>track==="all"||f.track===track);
+  const groups=grpFilter==="all"?SKILL_GROUPS:SKILL_GROUPS.filter(g=>g.key===grpFilter);
+
+  function cellVal(fid,skill){return allSkills[fid]?.[skill]||0;}
+
+  function cellStyle(v,skill){
+    if(v===0)return{bg:"#F1F5F9",tc:"#CBD5E1"};
+    if(dim==="proficiency"){const p=PROF.find(x=>x.v===v);return{bg:p.bg,tc:p.tc};}
+    if(dim==="coverage"){
+      const tot=filtFses.length;
+      const cnt=filtFses.filter(f=>cellVal(f.id,skill)>0).length;
+      const pct=tot?cnt/tot:0;
+      if(pct===0)return{bg:"#FEE2E2",tc:"#B91C1C"};
+      if(pct<0.5)return{bg:"#FEF3C7",tc:"#92400E"};
+      if(pct<1)return{bg:"#378ADD",tc:"#fff"};
+      return{bg:"#059669",tc:"#fff"};
+    }
+    if(v<=1)return{bg:"#FEE2E2",tc:"#B91C1C"};
+    if(v<=2)return{bg:"#FEF3C7",tc:"#92400E"};
+    if(v<=3)return{bg:"#D1FAE5",tc:"#065F46"};
+    return{bg:"#059669",tc:"#fff"};
+  }
+
+  function cov(skill){return filtFses.filter(f=>cellVal(f.id,skill)>0).length;}
+  function avgP(skill){
+    const vs=filtFses.map(f=>cellVal(f.id,skill)).filter(v=>v>0);
+    return vs.length?(vs.reduce((a,b)=>a+b,0)/vs.length).toFixed(1):"–";
+  }
+
+  const DIMS=[["proficiency","Proficiency"],["gap","Gap view"],["coverage","Team coverage"]];
+
+  return React.createElement('div',null,
+    // Toolbar
+    React.createElement('div',{style:{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}},
+      React.createElement('div',{style:{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}},
+        React.createElement('span',{style:{fontSize:11,color:"#94A3B8",marginRight:4}},"View:"),
+        DIMS.map(([k,l])=>React.createElement('button',{key:k,onClick:()=>setDim(k),
+          style:{padding:"4px 12px",borderRadius:20,fontSize:11,fontWeight:500,cursor:"pointer",fontFamily:"inherit",
+            border:dim===k?"2px solid #00BFA5":"1.5px solid #E2E8F0",
+            background:dim===k?"#E0FBF8":"#fff",color:dim===k?"#006B5C":"#64748B"}
+        },l))
+      ),
+      React.createElement('div',{style:{marginLeft:"auto",display:"flex",gap:6,flexWrap:"wrap"}},
+        React.createElement('select',{value:track,onChange:e=>setTrack(e.target.value),
+          style:{padding:"4px 10px",borderRadius:6,border:"1.5px solid #E2E8F0",fontSize:11,fontFamily:"inherit"}},
+          React.createElement('option',{value:"all"},"All tracks"),
+          React.createElement('option',{value:"Technical"},"Technical only"),
+          React.createElement('option',{value:"Behavioural"},"Behavioural only")
+        ),
+        React.createElement('select',{value:grpFilter,onChange:e=>setGrpFilter(e.target.value),
+          style:{padding:"4px 10px",borderRadius:6,border:"1.5px solid #E2E8F0",fontSize:11,fontFamily:"inherit"}},
+          React.createElement('option',{value:"all"},"All groups"),
+          SKILL_GROUPS.map(g=>React.createElement('option',{key:g.key,value:g.key},g.label))
+        ),
+        React.createElement(Btn,{small:true,variant:"secondary",onClick:()=>setExportModal(true)},"Export ↗")
+      )
+    ),
+
+    // Dimension context note
+    React.createElement('div',{style:{marginBottom:12,padding:"8px 14px",borderRadius:8,
+      background:dim==="gap"?"#FFF7ED":dim==="coverage"?"#EFF6FF":"#F0FDF4",
+      fontSize:11,color:dim==="gap"?"#92400E":dim==="coverage"?"#1E40AF":"#065F46",
+      border:`1px solid ${dim==="gap"?"#FDE68A":dim==="coverage"?"#BFDBFE":"#BBF7D0"}`}},
+      dim==="proficiency"&&"Showing individual proficiency scores (1–5) per FSE per skill",
+      dim==="gap"&&"⚠ Gap view: Red = critical gap (1), Amber = low proficiency (2), use this for risk conversations with leadership",
+      dim==="coverage"&&"Team coverage: Green = all FSEs rated · Blue = partial · Amber = thin · Red = no coverage — ideal for proposals"
+    ),
+
+    // Table
+    React.createElement('div',{style:{overflowX:"auto",borderRadius:10,border:"1.5px solid #E2E8F0",boxShadow:"0 2px 8px rgba(0,0,0,.05)"}},
+      React.createElement('table',{style:{borderCollapse:"collapse",width:"100%",minWidth:500,fontSize:11}},
+        React.createElement('thead',null,
+          React.createElement('tr',null,
+            React.createElement('th',{style:{background:"#1C2B3A",color:"#7FB3CC",fontSize:10,
+              padding:"8px 14px",textAlign:"left",minWidth:140,whiteSpace:"nowrap",position:"sticky",left:0,zIndex:2}},"FSE"),
+            ...groups.map((grp,gi)=>React.createElement('th',{key:grp.key,colSpan:grp.skills.length,
+              style:{background:grp.color.bg,color:grp.color.dark,fontSize:9,fontWeight:700,
+                padding:"5px 6px",textAlign:"center",
+                borderLeft:gi>0?"2px solid #D4DCE4":"none",letterSpacing:".06em",textTransform:"uppercase"}
+            },grp.icon+" "+grp.label))
+          ),
+          React.createElement('tr',null,
+            React.createElement('th',{style:{background:"#243547",padding:"5px 14px",position:"sticky",left:0,zIndex:2}}),
+            ...groups.flatMap((grp,gi)=>grp.skills.map((s,si)=>
+              React.createElement('th',{key:s,style:{background:"#FAFBFC",color:"#64748B",fontSize:9,
+                padding:"4px 2px",textAlign:"center",
+                borderLeft:gi>0&&si===0?"2px solid #D4DCE4":"1px solid #F0F4F8",maxWidth:52}},
+                React.createElement('div',{style:{writingMode:"vertical-rl",transform:"rotate(180deg)",
+                  maxHeight:56,overflow:"hidden",fontSize:9,whiteSpace:"nowrap",textOverflow:"ellipsis"}},s)
+              )
+            ))
+          )
+        ),
+        React.createElement('tbody',null,
+          filtFses.length===0
+            ? React.createElement('tr',null,React.createElement('td',{colSpan:999,style:{padding:"24px",textAlign:"center",color:"#94A3B8",fontSize:12}},"No FSEs match the selected track filter"))
+            : filtFses.map((fse,fi)=>
+              React.createElement('tr',{key:fse.id,style:{background:fi%2===0?"#fff":"#FAFBFD"}},
+                React.createElement('td',{style:{padding:"7px 14px",fontWeight:600,fontSize:11,color:"#1C2B3A",
+                  whiteSpace:"nowrap",borderRight:"2px solid #EEF2F6",position:"sticky",left:0,
+                  background:fi%2===0?"#fff":"#FAFBFD",zIndex:1}},
+                  fse.name,
+                  React.createElement('span',{style:{display:"block",fontSize:9,color:"#94A3B8",fontWeight:400}},fse.grade+(fse.grade?" · ":"")+fse.role)
+                ),
+                ...groups.flatMap((grp,gi)=>grp.skills.map((s,si)=>{
+                  const v=cellVal(fse.id,s);
+                  const {bg,tc}=cellStyle(v,s);
+                  return React.createElement('td',{key:s,style:{padding:"3px 2px",textAlign:"center",
+                    borderLeft:gi>0&&si===0?"2px solid #D4DCE4":"1px solid #F0F4F8"}},
+                    React.createElement('div',{
+                      style:{background:bg,color:tc,borderRadius:3,height:26,display:"flex",
+                        alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:11,
+                        minWidth:24,cursor:"default"},
+                      title:`${fse.name} · ${s}: ${v===0?"Not rated":PROF.find(p=>p.v===v)?.l+" ("+v+"/5)"}`
+                    },v===0?"–":v)
+                  );
+                }))
+              )
+            ),
+          // Summary rows
+          React.createElement('tr',{style:{borderTop:"2px solid #D4DCE4",background:"#F8FAFB"}},
+            React.createElement('td',{style:{padding:"5px 14px",fontSize:10,color:"#94A3B8",fontStyle:"italic",
+              borderRight:"2px solid #EEF2F6",position:"sticky",left:0,background:"#F8FAFB",zIndex:1}},"FSEs rated"),
+            ...groups.flatMap((grp,gi)=>grp.skills.map((s,si)=>{
+              const c=cov(s);
+              const col=c===0?"#DC2626":c===1?"#D97706":c>=filtFses.length?"#059669":"#2563EB";
+              return React.createElement('td',{key:s,style:{padding:"3px 2px",textAlign:"center",
+                borderLeft:gi>0&&si===0?"2px solid #D4DCE4":"1px solid #F0F4F8"}},
+                React.createElement('span',{style:{fontSize:10,fontWeight:700,color:col}},c)
+              );
+            }))
+          ),
+          React.createElement('tr',{style:{background:"#F8FAFB"}},
+            React.createElement('td',{style:{padding:"5px 14px",fontSize:10,color:"#94A3B8",fontStyle:"italic",
+              borderRight:"2px solid #EEF2F6",position:"sticky",left:0,background:"#F8FAFB",zIndex:1}},"Avg proficiency"),
+            ...groups.flatMap((grp,gi)=>grp.skills.map((s,si)=>
+              React.createElement('td',{key:s,style:{padding:"3px 2px",textAlign:"center",
+                borderLeft:gi>0&&si===0?"2px solid #D4DCE4":"1px solid #F0F4F8"}},
+                React.createElement('span',{style:{fontSize:10,color:"#64748B"}},avgP(s))
+              )
+            ))
+          )
+        )
+      )
+    ),
+
+    // Legend
+    React.createElement('div',{style:{display:"flex",gap:8,flexWrap:"wrap",marginTop:14,alignItems:"center"}},
+      React.createElement('span',{style:{fontSize:10,color:"#94A3B8"}},"Scale:"),
+      ...PROF.map(p=>React.createElement('div',{key:p.v,style:{display:"flex",alignItems:"center",gap:4}},
+        React.createElement('div',{style:{width:20,height:14,borderRadius:3,background:p.bg}}),
+        React.createElement('span',{style:{fontSize:10,color:"#64748B"}},p.v+" – "+p.l)
+      )),
+      React.createElement('div',{style:{display:"flex",alignItems:"center",gap:4,marginLeft:6}},
+        React.createElement('div',{style:{width:20,height:14,borderRadius:3,background:"#F1F5F9",border:"1px solid #E2E8F0"}}),
+        React.createElement('span',{style:{fontSize:10,color:"#94A3B8"}},"Not rated")
+      )
+    ),
+
+    exportModal&&React.createElement(Modal,{title:"Export this heatmap",onClose:()=>setExportModal(false),width:400},
+      React.createElement('div',{style:{fontSize:13,color:"#475569",lineHeight:1.8}},
+        React.createElement('p',{style:{marginBottom:10,fontWeight:600}},"Three ways to export:"),
+        React.createElement('div',{style:{display:"flex",flexDirection:"column",gap:10}},
+          ...[
+            ["📋 Copy to Excel","Select the table (Ctrl+A on the table), copy, paste into Excel. Colours carry over."],
+            ["🖨 Save as PDF","Browser menu → Print → Save as PDF. Use landscape orientation for best fit."],
+            ["📸 Screenshot","Press-and-hold on the heatmap for mobile, or use Snipping Tool / Cmd+Shift+4 on Mac."],
+          ].map(([t,d])=>React.createElement('div',{key:t,style:{background:"#F8FAFB",borderRadius:8,padding:"10px 14px"}},
+            React.createElement('div',{style:{fontWeight:600,fontSize:12,marginBottom:3}},t),
+            React.createElement('div',{style:{fontSize:11,color:"#64748B"}},d)
+          ))
+        ),
+        React.createElement('div',{style:{background:"#E0FBF8",borderRadius:8,padding:"10px 14px",marginTop:12,fontSize:11,color:"#065F46"}},
+          "💡 Switch to Gap view for risk decks · Team Coverage for proposals · Proficiency for capability showcases"
+        )
+      ),
+      React.createElement('div',{style:{marginTop:14,textAlign:"right"}},
+        React.createElement(Btn,{variant:"ghost",onClick:()=>setExportModal(false)},"Close")
+      )
+    )
+  );
+}
+
+// ── App Shell ──────────────────────────────────────────────────────────────────
+function App(){
+  const [fses,setFsesRaw]=useState(()=>loadFromStorage(STORAGE_KEY_FSES,DEFAULT_FSES));
+  const [skills,setSkillsRaw]=useState(()=>loadFromStorage(STORAGE_KEY_SKILLS,DEFAULT_SKILLS));
+  const [view,setView]=useState("heatmap");
+  const [activeFseId,setActiveFseId]=useState(()=>(loadFromStorage(STORAGE_KEY_FSES,DEFAULT_FSES)[0]?.id));
+  const [toast,setToast]=useState(null);
+  const [sidebarOpen,setSidebarOpen]=useState(true);
+
+  function setFses(u){const n=typeof u==="function"?u(fses):u;setFsesRaw(n);saveToStorage(STORAGE_KEY_FSES,n);}
+  function setSkills(u){const n=typeof u==="function"?u(skills):u;setSkillsRaw(n);saveToStorage(STORAGE_KEY_SKILLS,n);}
+  function updateSkills(fid,sk){setSkills(p=>{const n={...p,[fid]:sk};saveToStorage(STORAGE_KEY_SKILLS,n);return n;});}
+  function showToast(msg){setToast(msg);}
+
+  const activeFse=fses.find(f=>f.id===activeFseId)||fses[0];
+  const totalEntries=Object.values(skills).reduce((s,sk)=>s+Object.keys(sk).length,0);
+
+  const NAV=[
+    {k:"heatmap",l:"Heatmap",i:"▦",desc:"Leadership & proposals"},
+    {k:"pm",l:"Programme Mgr",i:"◈",desc:"Manage FSE roster"},
+    {k:"educator",l:"Educator View",i:"⬡",desc:"Self-entry skills"},
+  ];
+
+  return React.createElement('div',{style:{display:"flex",height:"100vh",background:"#F4F7FA",fontFamily:"'Inter',system-ui,sans-serif",overflow:"hidden"}},
+    // Sidebar
+    React.createElement('div',{style:{width:sidebarOpen?210:0,minWidth:sidebarOpen?210:0,background:"#1C2B3A",
+      display:"flex",flexDirection:"column",flexShrink:0,transition:"width .2s, min-width .2s",overflow:"hidden"}},
+      React.createElement('div',{style:{padding:"18px 16px 14px",borderBottom:"1px solid #243547",whiteSpace:"nowrap"}},
+        React.createElement('div',{style:{color:"#00BFA5",fontWeight:900,fontSize:15,letterSpacing:".02em"}},"FSE Skills"),
+        React.createElement('div',{style:{color:"#3D5F7A",fontSize:10,marginTop:1}},"Intelligence Platform")
+      ),
+      React.createElement('div',{style:{padding:"10px 6px",flex:1,overflowY:"auto",overflowX:"hidden"}},
+        NAV.map(n=>React.createElement('button',{key:n.k,onClick:()=>setView(n.k),
+          style:{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"8px 10px",
+            borderRadius:7,border:"none",cursor:"pointer",marginBottom:2,textAlign:"left",
+            background:view===n.k?"#243547":"transparent",
+            color:view===n.k?"#00BFA5":"#7FB3CC",
+            fontSize:12,fontFamily:"inherit",fontWeight:view===n.k?700:400,whiteSpace:"nowrap"}
+        },
+          React.createElement('span',{style:{fontSize:13,flexShrink:0}},n.i),
+          React.createElement('div',null,
+            React.createElement('div',null,n.l),
+            React.createElement('div',{style:{fontSize:9,color:view===n.k?"#5BDFC8":"#3D5F7A",marginTop:1}},n.desc)
+          )
+        )),
+        view==="educator"&&React.createElement('div',{style:{marginTop:10,paddingTop:10,borderTop:"1px solid #243547"}},
+          React.createElement('div',{style:{color:"#3D5F7A",fontSize:9,fontWeight:700,marginBottom:6,paddingLeft:4,letterSpacing:".08em",whiteSpace:"nowrap"}},"SWITCH EDUCATOR"),
+          fses.map(f=>React.createElement('button',{key:f.id,onClick:()=>setActiveFseId(f.id),
+            style:{display:"flex",alignItems:"center",gap:7,width:"100%",padding:"6px 8px",
+              borderRadius:6,border:"none",cursor:"pointer",marginBottom:2,textAlign:"left",
+              background:activeFseId===f.id?"#243547":"transparent",
+              color:activeFseId===f.id?"#fff":"#5A8099",fontSize:11,fontFamily:"inherit",whiteSpace:"nowrap"}
+          },
+            React.createElement('div',{style:{width:22,height:22,borderRadius:"50%",
+              background:activeFseId===f.id?"#00BFA5":"#2A3F54",
+              display:"flex",alignItems:"center",justifyContent:"center",
+              fontSize:8,fontWeight:700,color:"#fff",flexShrink:0}},
+              f.name.split(" ").map(w=>w[0]).join("").slice(0,2)
+            ),
+            React.createElement('span',{style:{overflow:"hidden",textOverflow:"ellipsis"}},
+              f.name.split(" ")[0]+" "+(f.name.split(" ").slice(-1)[0]||"")
+            )
+          ))
+        )
+      ),
+      React.createElement('div',{style:{padding:"10px 14px",borderTop:"1px solid #243547",whiteSpace:"nowrap"}},
+        React.createElement('div',{style:{color:"#3D5F7A",fontSize:10}},fses.length+" FSEs · "+totalEntries+" entries"),
+        React.createElement('div',{style:{color:"#243547",fontSize:9,marginTop:3}},"Data saved in browser")
+      )
+    ),
+
+    // Main area
+    React.createElement('div',{style:{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}},
+      // Topbar
+      React.createElement('div',{style:{background:"#fff",borderBottom:"1px solid #EEF2F6",
+        padding:"10px 20px",display:"flex",alignItems:"center",gap:12,flexShrink:0}},
+        React.createElement('button',{onClick:()=>setSidebarOpen(o=>!o),
+          style:{background:"none",border:"none",cursor:"pointer",color:"#94A3B8",fontSize:18,padding:"2px 6px",borderRadius:4}},
+          sidebarOpen?"◀":"▶"
+        ),
+        React.createElement('div',{style:{flex:1,minWidth:0}},
+          React.createElement('div',{style:{fontWeight:700,fontSize:14,color:"#1C2B3A",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},
+            view==="heatmap"?"Capability Heatmap":
+            view==="pm"?"Programme Manager · Roster":
+            (activeFse?.name||"")+" · Skills"
+          ),
+          React.createElement('div',{style:{color:"#94A3B8",fontSize:11,marginTop:1}},
+            view==="heatmap"?"Multi-dimension view for leadership reviews and proposals":
+            view==="pm"?"Manage FSE profiles and track team capability coverage":
+            "Add, update and manage your personal skill profile"
+          )
+        ),
+        view==="heatmap"&&React.createElement('div',{style:{display:"flex",gap:5,flexShrink:0}},
+          React.createElement('span',{style:{background:"#E8F4FD",color:"#1A7FCC",borderRadius:20,padding:"2px 10px",fontSize:10,fontWeight:500}},"Leadership ready"),
+          React.createElement('span',{style:{background:"#E0FBF8",color:"#006B5C",borderRadius:20,padding:"2px 10px",fontSize:10,fontWeight:500}},"Proposal ready")
+        )
+      ),
+
+      // Content
+      React.createElement('div',{style:{flex:1,padding:"20px 24px",overflowY:"auto"}},
+        view==="heatmap"&&React.createElement(HeatmapView,{fses,allSkills:skills}),
+        view==="pm"&&React.createElement(PMView,{fses,allSkills:skills,setFses,setSkills,onToast:showToast}),
+        view==="educator"&&activeFse&&React.createElement(EducatorView,{fse:activeFse,allSkills:skills,onUpdate:updateSkills,onToast:showToast})
+      )
+    ),
+
+    toast&&React.createElement(Toast,{msg:toast,onDone:()=>setToast(null)})
+  );
+}
+
+ReactDOM.render(React.createElement(App),document.getElementById("root"));
+</script>
+</body>
+</html>
